@@ -55,10 +55,100 @@
     </div>
   </main>
 
+  <button type="button" id="fab-add-event" class="fab" aria-label="Aggiungi evento">+</button>
+
   <dialog id="day-dialog">
     <h2 id="day-dialog-title"></h2>
     <div id="day-dialog-events"></div>
     <button type="button" id="day-dialog-close">Chiudi</button>
+  </dialog>
+
+  <dialog id="event-form-dialog">
+    <h2 id="event-form-heading">Nuovo evento</h2>
+    <p id="event-form-series-note" class="form-note" hidden>Le modifiche si applicano a tutte le date di questa serie.</p>
+    <form id="event-form">
+      <label class="form-field">
+        <span>Titolo</span>
+        <input type="text" id="ef-title" required maxlength="200" placeholder="Es. Compleanno di Nonna">
+      </label>
+
+      <label class="form-field">
+        <span>Luogo (opzionale)</span>
+        <input type="text" id="ef-location" maxlength="200">
+      </label>
+
+      <label class="form-field form-field--checkbox">
+        <input type="checkbox" id="ef-allday">
+        <span>Tutto il giorno</span>
+      </label>
+
+      <label class="form-field">
+        <span>Data</span>
+        <input type="date" id="ef-date" required>
+      </label>
+
+      <div id="ef-time-row" class="form-row">
+        <label class="form-field">
+          <span>Inizio</span>
+          <input type="time" id="ef-start-time">
+        </label>
+        <label class="form-field">
+          <span>Fine</span>
+          <input type="time" id="ef-end-time">
+        </label>
+      </div>
+      <p id="ef-time-error" class="form-error" hidden>L'orario di fine deve essere dopo quello di inizio.</p>
+
+      <label class="form-field">
+        <span>Si ripete</span>
+        <select id="ef-repeat">
+          <option value="none">Mai</option>
+          <option value="daily">Ogni giorno</option>
+          <option value="weekly">Ogni settimana</option>
+          <option value="monthly">Ogni mese</option>
+          <option value="yearly">Ogni anno</option>
+        </select>
+      </label>
+
+      <div id="ef-weekday-row" class="weekday-picker" hidden>
+        <label><input type="checkbox" value="0"><span>Lun</span></label>
+        <label><input type="checkbox" value="1"><span>Mar</span></label>
+        <label><input type="checkbox" value="2"><span>Mer</span></label>
+        <label><input type="checkbox" value="3"><span>Gio</span></label>
+        <label><input type="checkbox" value="4"><span>Ven</span></label>
+        <label><input type="checkbox" value="5"><span>Sab</span></label>
+        <label><input type="checkbox" value="6"><span>Dom</span></label>
+      </div>
+
+      <div id="ef-end-row" class="form-row" hidden>
+        <label class="form-field">
+          <span>Termina</span>
+          <select id="ef-end-type">
+            <option value="never">Mai</option>
+            <option value="onDate">In una data</option>
+            <option value="count">Dopo un numero di volte</option>
+          </select>
+        </label>
+      </div>
+      <input type="date" id="ef-end-date" class="form-field" hidden>
+      <input type="number" id="ef-end-count" class="form-field" min="1" step="1" placeholder="Numero di volte" hidden>
+
+      <label class="form-field">
+        <span>Note (opzionale)</span>
+        <textarea id="ef-notes" rows="2" maxlength="1000"></textarea>
+      </label>
+
+      <div class="form-actions">
+        <button type="button" id="ef-cancel">Annulla</button>
+        <button type="submit" id="ef-submit">Salva</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="delete-dialog">
+    <h2>Eliminare l'evento?</h2>
+    <div id="delete-dialog-options" class="form-actions form-actions--stacked"></div>
+    <button type="button" id="delete-dialog-cancel">Annulla</button>
   </dialog>
 
   <footer class="app-footer">
