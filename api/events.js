@@ -84,16 +84,24 @@ function fromRow(row) {
   };
 }
 
+async function assertOk(res, label) {
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    console.error(`[events.js] ${label} failed: ${res.status} ${res.statusText} — ${text.slice(0, 500)}`);
+    throw new Error('supabase_error');
+  }
+}
+
 async function fetchAllEvents() {
   const res = await fetch(restUrl('?select=*&order=created_at.asc'), { headers: restHeaders() });
-  if (!res.ok) throw new Error('supabase_error');
+  await assertOk(res, 'GET all');
   const rows = await res.json();
   return rows.map(fromRow);
 }
 
 async function fetchOneRow(id) {
   const res = await fetch(restUrl(`?id=eq.${encodeURIComponent(id)}&select=*`), { headers: restHeaders() });
-  if (!res.ok) throw new Error('supabase_error');
+  await assertOk(res, 'GET one');
   const rows = await res.json();
   return rows[0] || null;
 }
@@ -105,6 +113,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.error(`[events.js] SUPABASE_URL=${SUPABASE_URL} table=${TABLE}`);
     if (req.method === 'GET') {
       const events = await fetchAllEvents();
       res.setHeader('Cache-Control', 'no-store');
@@ -127,7 +136,7 @@ export default async function handler(req, res) {
         headers: restHeaders({ Prefer: 'return=minimal' }),
         body: JSON.stringify(toInsertRow(event)),
       });
-      if (!insertRes.ok) throw new Error('supabase_error');
+      await assertOk(insertRes, 'INSERT');
       const events = await fetchAllEvents();
       res.setHeader('Cache-Control', 'no-store');
       res.status(200).json(events);
@@ -146,7 +155,7 @@ export default async function handler(req, res) {
         headers: restHeaders({ Prefer: 'return=minimal' }),
         body: JSON.stringify(toUpdateRow(sanitized)),
       });
-      if (!updateRes.ok) throw new Error('supabase_error');
+      await assertOk(updateRes, 'UPDATE');
       const events = await fetchAllEvents();
       res.setHeader('Cache-Control', 'no-store');
       res.status(200).json(events);
@@ -165,7 +174,7 @@ export default async function handler(req, res) {
           method: 'DELETE',
           headers: restHeaders({ Prefer: 'return=minimal' }),
         });
-        if (!delRes.ok) throw new Error('supabase_error');
+        await assertOk(delRes, 'DELETE');
       } else if (body.mode === 'occurrence') {
         const exceptions = [...(existing.exceptions || []), body.date];
         const patchRes = await fetch(restUrl(`?id=eq.${encodeURIComponent(body.id)}`), {
@@ -173,7 +182,7 @@ export default async function handler(req, res) {
           headers: restHeaders({ Prefer: 'return=minimal' }),
           body: JSON.stringify({ exceptions }),
         });
-        if (!patchRes.ok) throw new Error('supabase_error');
+        await assertOk(patchRes, 'PATCH exceptions');
       } else if (body.mode === 'following') {
         const recurrence = { ...existing.recurrence, end: { type: 'onDate', date: dayBefore(body.date) } };
         const patchRes = await fetch(restUrl(`?id=eq.${encodeURIComponent(body.id)}`), {
@@ -181,7 +190,7 @@ export default async function handler(req, res) {
           headers: restHeaders({ Prefer: 'return=minimal' }),
           body: JSON.stringify({ recurrence }),
         });
-        if (!patchRes.ok) throw new Error('supabase_error');
+        await assertOk(patchRes, 'PATCH recurrence');
       }
 
       const events = await fetchAllEvents();
@@ -192,6 +201,7 @@ export default async function handler(req, res) {
 
     res.status(400).json({ error: 'unknown_action' });
   } catch (err) {
+    console.error(`[events.js] unhandled: ${err && err.message}`);
     res.status(502).json({ error: 'storage_unreachable' });
   }
 }
