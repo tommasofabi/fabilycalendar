@@ -1,33 +1,18 @@
-const KV_URL = process.env.KV_REST_API_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN;
-const EVENTS_KEY = 'customEvents';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const TABLE = 'custom_events';
 
-async function kvCommand(cmd) {
-  const res = await fetch(KV_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${KV_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(cmd),
-  });
-  if (!res.ok) throw new Error('kv_request_failed');
-  const data = await res.json();
-  return data.result;
+function restUrl(query) {
+  return `${SUPABASE_URL}/rest/v1/${TABLE}${query}`;
 }
 
-async function loadEvents() {
-  const raw = await kvCommand(['GET', EVENTS_KEY]);
-  if (!raw) return [];
-  try {
-    return JSON.parse(raw);
-  } catch (err) {
-    return [];
-  }
-}
-
-async function saveEvents(events) {
-  await kvCommand(['SET', EVENTS_KEY, JSON.stringify(events)]);
+function restHeaders(extra = {}) {
+  return {
+    apikey: SUPABASE_KEY,
+    Authorization: `Bearer ${SUPABASE_KEY}`,
+    'Content-Type': 'application/json',
+    ...extra,
+  };
 }
 
 function makeId() {
@@ -55,15 +40,73 @@ function sanitizeIncomingEvent(input) {
   };
 }
 
+function toInsertRow(event) {
+  return {
+    id: event.id,
+    title: event.title,
+    location: event.location,
+    notes: event.notes,
+    all_day: event.allDay,
+    date: event.date,
+    start_time: event.startTime,
+    end_time: event.endTime,
+    recurrence: event.recurrence,
+    exceptions: [],
+  };
+}
+
+function toUpdateRow(sanitized) {
+  return {
+    title: sanitized.title,
+    location: sanitized.location,
+    notes: sanitized.notes,
+    all_day: sanitized.allDay,
+    date: sanitized.date,
+    start_time: sanitized.startTime,
+    end_time: sanitized.endTime,
+    recurrence: sanitized.recurrence,
+  };
+}
+
+function fromRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    location: row.location || '',
+    notes: row.notes || '',
+    allDay: !!row.all_day,
+    date: row.date,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    recurrence: row.recurrence,
+    exceptions: row.exceptions || [],
+    createdAt: row.created_at,
+  };
+}
+
+async function fetchAllEvents() {
+  const res = await fetch(restUrl('?select=*&order=created_at.asc'), { headers: restHeaders() });
+  if (!res.ok) throw new Error('supabase_error');
+  const rows = await res.json();
+  return rows.map(fromRow);
+}
+
+async function fetchOneRow(id) {
+  const res = await fetch(restUrl(`?id=eq.${encodeURIComponent(id)}&select=*`), { headers: restHeaders() });
+  if (!res.ok) throw new Error('supabase_error');
+  const rows = await res.json();
+  return rows[0] || null;
+}
+
 export default async function handler(req, res) {
-  if (!KV_URL || !KV_TOKEN) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
     res.status(500).json({ error: 'not_configured' });
     return;
   }
 
   try {
     if (req.method === 'GET') {
-      const events = await loadEvents();
+      const events = await fetchAllEvents();
       res.setHeader('Cache-Control', 'no-store');
       res.status(200).json(events);
       return;
@@ -75,55 +118,73 @@ export default async function handler(req, res) {
     }
 
     const body = typeof req.body === 'object' && req.body ? req.body : JSON.parse(req.body || '{}');
-    const events = await loadEvents();
 
     if (body.action === 'create') {
-      const event = {
-        id: makeId(),
-        ...sanitizeIncomingEvent(body.event || {}),
-        exceptions: [],
-        createdAt: new Date().toISOString(),
-      };
-      events.push(event);
-      await saveEvents(events);
+      const sanitized = sanitizeIncomingEvent(body.event || {});
+      const event = { id: makeId(), ...sanitized };
+      const insertRes = await fetch(restUrl(''), {
+        method: 'POST',
+        headers: restHeaders({ Prefer: 'return=minimal' }),
+        body: JSON.stringify(toInsertRow(event)),
+      });
+      if (!insertRes.ok) throw new Error('supabase_error');
+      const events = await fetchAllEvents();
       res.setHeader('Cache-Control', 'no-store');
       res.status(200).json(events);
       return;
     }
 
     if (body.action === 'update') {
-      const idx = events.findIndex((e) => e.id === body.id);
-      if (idx === -1) {
+      const existing = await fetchOneRow(body.id);
+      if (!existing) {
         res.status(404).json({ error: 'not_found' });
         return;
       }
-      events[idx] = {
-        ...events[idx],
-        ...sanitizeIncomingEvent(body.event || {}),
-      };
-      await saveEvents(events);
+      const sanitized = sanitizeIncomingEvent(body.event || {});
+      const updateRes = await fetch(restUrl(`?id=eq.${encodeURIComponent(body.id)}`), {
+        method: 'PATCH',
+        headers: restHeaders({ Prefer: 'return=minimal' }),
+        body: JSON.stringify(toUpdateRow(sanitized)),
+      });
+      if (!updateRes.ok) throw new Error('supabase_error');
+      const events = await fetchAllEvents();
       res.setHeader('Cache-Control', 'no-store');
       res.status(200).json(events);
       return;
     }
 
     if (body.action === 'delete') {
-      const idx = events.findIndex((e) => e.id === body.id);
-      if (idx === -1) {
+      const existing = await fetchOneRow(body.id);
+      if (!existing) {
         res.status(404).json({ error: 'not_found' });
         return;
       }
-      if (body.mode === 'all' || !events[idx].recurrence) {
-        events.splice(idx, 1);
+
+      if (body.mode === 'all' || !existing.recurrence) {
+        const delRes = await fetch(restUrl(`?id=eq.${encodeURIComponent(body.id)}`), {
+          method: 'DELETE',
+          headers: restHeaders({ Prefer: 'return=minimal' }),
+        });
+        if (!delRes.ok) throw new Error('supabase_error');
       } else if (body.mode === 'occurrence') {
-        events[idx].exceptions = [...(events[idx].exceptions || []), body.date];
+        const exceptions = [...(existing.exceptions || []), body.date];
+        const patchRes = await fetch(restUrl(`?id=eq.${encodeURIComponent(body.id)}`), {
+          method: 'PATCH',
+          headers: restHeaders({ Prefer: 'return=minimal' }),
+          body: JSON.stringify({ exceptions }),
+        });
+        if (!patchRes.ok) throw new Error('supabase_error');
       } else if (body.mode === 'following') {
-        events[idx].recurrence = {
-          ...events[idx].recurrence,
-          end: { type: 'onDate', date: dayBefore(body.date) },
-        };
+        const recurrence = { ...existing.recurrence, end: { type: 'onDate', date: dayBefore(body.date) } };
+        const patchRes = await fetch(restUrl(`?id=eq.${encodeURIComponent(body.id)}`), {
+          method: 'PATCH',
+          headers: restHeaders({ Prefer: 'return=minimal' }),
+          body: JSON.stringify({ recurrence }),
+        });
+        if (!patchRes.ok) throw new Error('supabase_error');
       }
-      await saveEvents(events);
+
+      const events = await fetchAllEvents();
       res.setHeader('Cache-Control', 'no-store');
       res.status(200).json(events);
       return;
