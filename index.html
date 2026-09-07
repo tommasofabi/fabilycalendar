@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calendario Fabily</title>
+<meta name="theme-color" content="#2f6f4f">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>Calendario Fabily</h1>
+    <nav class="view-toggle" aria-label="Vista calendario">
+      <button type="button" class="view-btn" data-view="month" aria-pressed="true">Mese</button>
+      <button type="button" class="view-btn" data-view="week" aria-pressed="false">Settimana</button>
+      <button type="button" class="view-btn" data-view="agenda" aria-pressed="false">Agenda</button>
+    </nav>
+  </header>
+
+  <main id="main">
+    <div id="loading" class="state-message">Caricamento del calendario…</div>
+
+    <div id="error-full" class="state-message state-message--error" hidden>
+      <p>Impossibile caricare il calendario. Controlla la connessione e riprova.</p>
+      <button type="button" id="retry-btn">Riprova</button>
+    </div>
+
+    <div id="calendar-content" hidden>
+      <div id="stale-banner" class="banner" hidden></div>
+
+      <section id="month-view" class="view">
+        <div class="view-nav">
+          <button type="button" id="month-prev" class="nav-btn" aria-label="Mese precedente">‹</button>
+          <h2 id="month-label"></h2>
+          <button type="button" id="month-next" class="nav-btn" aria-label="Mese successivo">›</button>
+        </div>
+        <div class="weekday-row">
+          <span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span>
+        </div>
+        <div id="month-grid" class="month-grid"></div>
+      </section>
+
+      <section id="week-view" class="view" hidden>
+        <div class="view-nav">
+          <button type="button" id="week-prev" class="nav-btn" aria-label="Settimana precedente">‹</button>
+          <h2 id="week-label"></h2>
+          <button type="button" id="week-next" class="nav-btn" aria-label="Settimana successiva">›</button>
+        </div>
+        <div id="week-list" class="week-list"></div>
+      </section>
+
+      <section id="agenda-view" class="view" hidden>
+        <div id="agenda-list" class="agenda-list"></div>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="day-dialog">
+    <h2 id="day-dialog-title"></h2>
+    <div id="day-dialog-events"></div>
+    <button type="button" id="day-dialog-close">Chiudi</button>
+  </dialog>
+
+  <footer class="app-footer">
+    <span id="updated-label">Aggiornamento in corso…</span>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "calendario-fabily",
+  "private": true,
+  "engines": {
+    "node": "20.x"
+  }
+}
